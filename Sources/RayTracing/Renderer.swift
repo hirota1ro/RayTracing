@@ -9,7 +9,7 @@ extension Renderer {
     func render(size: CGSize) -> NSImage {
         let image_width: Int = Int(ceil(size.width))
         let image_height: Int = Int(ceil(size.height))
-        var bitmap = Bitmap(width: image_width, height: image_height)
+        var bitmap = BitmapBuffer(width: image_width, height: image_height)
         let progress = Progress()
         for j in 0 ..< image_height {
             progress.progress(ratio: Float(j) / Float(image_height))

@@ -1,79 +1,89 @@
 import Cocoa
+import CoreGraphics
+import Foundation
 
+/// A utility for creating bitmap images in memory.
+///
+/// Example
+/// ```
+///     let bitmap = Bitmap(size: CGSize(width: 640, height: 480))
+///     let cgImage = bitmap.image { (cgContext) in
+///         cgContext.translateBy(x: 100, y: 200)
+///         "Hello".draw(at: .zero)
+///     }
+///     let data = cgImage.pngData
+///     do {
+///         try data.write(to: pngURL, options: .atomic)
+///         print("succeeded to write \(pngURL.path)")
+///     } catch {
+///         print("failed to write \(error)")
+///     }
+/// ```
+///
 struct Bitmap {
-
-    let width: Int
-    let height: Int
-    var data: Data
-
-    let bitsPerComponent = 8
-    let numberOfComponents = 3
-
-    init(width: Int, height: Int) {
-        assert(0 < width)
-        assert(0 < height)
-        self.width = width
-        self.height = height
-        self.data = Data(count: width * height * numberOfComponents)
-    }
-
-    /**
-     * @param index pixel index (0..<(width*height))
-     * @return rgb (0x00rrggbb)
-     */
-    subscript(index: Int) -> UInt32 {
-        get {
-            let i = index * numberOfComponents
-            let r = UInt32(data[i])
-            let g = UInt32(data[i+1])
-            let b = UInt32(data[i+2])
-            return (r << 16) | (g << 8) | (b)
-        }
-        set {
-            let i = index * numberOfComponents
-            let r = (newValue >> 16) & 0xFF
-            let g = (newValue >> 8) & 0xFF
-            let b = (newValue) & 0xFF
-            data[i] = UInt8(r)
-            data[i+1] = UInt8(g)
-            data[i+2] = UInt8(b)
-        }
-    }
-
-    /**
-     * @param x 0..<width
-     * @param y 0..<height
-     * @return rgb (0x00rrggbb)
-     */
-    subscript(x: Int, y: Int) -> UInt32 {
-        get { return self[y * width + x] }
-        set { self[y * width + x] = newValue }
-    }
+    let cgContext: CGContext
 }
 
 extension Bitmap {
 
-    var cgImage: CGImage? {
-        let bitsPerPixel = bitsPerComponent * numberOfComponents
-        let bytesPerPixel = bitsPerPixel / 8
-        let provider = CGDataProvider(data: data as CFData)
-        return CGImage(width: width,
-                       height: height,
-                       bitsPerComponent: bitsPerComponent,
-                       bitsPerPixel: bitsPerPixel,
-                       bytesPerRow: width * bytesPerPixel,
-                       space: CGColorSpaceCreateDeviceRGB(),
-                       bitmapInfo: [],
-                       provider: provider!,
-                       decode: nil,
-                       shouldInterpolate: false,
-                       intent: .defaultIntent)
+    /// initializes with size
+    /// - Parameter size: size of the image
+    init(size: CGSize) {
+        // create bitmap context
+        guard let cgContext = CGContext(data: nil,
+                                        width: Int(ceil(size.width)),
+                                        height: Int(ceil(size.height)),
+                                        bitsPerComponent: 8,
+                                        bytesPerRow: 4 * Int(ceil(size.width)),
+                                        space: CGColorSpaceCreateDeviceRGB(),
+                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            fatalError("CGContext.init()")
+        }
+        self.init(cgContext: cgContext)
     }
 
-    var image: NSImage? {
-        if let img = cgImage {
-            return NSImage(cgImage: img, size: CGSize(width: width, height: height))
+    /// Draw on the bitmap and get the image object.
+    /// - Parameter callback: Drawing Functions
+    /// - Returns: core graphics image object
+    func image(with callback: (CGContext) -> Void) -> CGImage {
+        // To be able to draw NSBezierPath etc.
+        let save = NSGraphicsContext.current
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: cgContext, flipped: false)
+        defer { NSGraphicsContext.current = save }
+
+        callback(cgContext)
+
+        // obtain core graphics image object
+        guard let cgImage = cgContext.makeImage() else {
+            fatalError("CGContext.makeImage()")
         }
-        return nil
+        return cgImage
+    }
+}
+
+// MARK: Utilities
+
+extension CGImage {
+
+    /// Gets the PNG bytes from an image object.
+    /// - Parameter cgImage: image object
+    /// - Returns: PNG byte array
+    var pngData: Data {
+        let bitmapRep = NSBitmapImageRep(cgImage: self)
+        guard let data = bitmapRep.representation(using: .png, properties: [:]) else {
+            fatalError("no data")
+        }
+        return data
+    }
+
+    /// Gets the JPEG bytes from an image object.
+    /// - Parameter cgImage: image object
+    /// - Returns: JPEG byte array
+    var jpegData: Data {
+        let bitmapRep = NSBitmapImageRep(cgImage: self)
+        guard let data = bitmapRep.representation(using: .jpeg, properties: [:]) else {
+            fatalError("no data")
+        }
+        return data
     }
 }

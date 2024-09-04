@@ -3,7 +3,7 @@ import Cocoa
 extension NSImage {
 
     func resized(to: CGSize) -> NSImage {
-        let bm = BitmapRasterizer(size: to)
+        let bm = Bitmap(size: to)
         let cgImg = bm.image { _ in
             self.draw(in: CGRect(origin: .zero, size: to))
         }
